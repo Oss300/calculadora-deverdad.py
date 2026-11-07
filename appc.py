@@ -1,4 +1,5 @@
 
+
 """
 Calculadora de Tabla de Verdad + Procedimiento con Leyes Lógicas
 Ejecutar con:  streamlit run calculadora_completa.py
@@ -21,8 +22,8 @@ TOKENS = [
     ("AND", r"∧|&&|&|\bAND\b"),
     ("OR", r"∨|\|\||\||\bOR\b"),
     ("NOT", r"¬|~|!|\bNOT\b"),
-    ("LP", r"\("),
-    ("RP", r"\)"),
+    ("LP", r"[(\[{]"),   # abre: ( [ {
+    ("RP", r"[)\]}]"),   # cierra: ) ] }
     ("CONST", r"\b[01]\b"),
     ("VAR", r"[A-Za-z_][A-Za-z0-9_]*"),
     ("WS", r"\s+"),
@@ -44,7 +45,32 @@ def tokenizar(texto):
         pos = m.end()
         if m.lastgroup != "WS":
             out.append((m.lastgroup, m.group()))
+    _validar_agrupadores(out)
     return out
+
+
+PAR = {"(": ")", "[": "]", "{": "}"}
+
+
+def _validar_agrupadores(tokens):
+    """Revisa que ( [ { se cierren con su pareja correcta y en el orden correcto."""
+    pila = []
+    for k, (tipo, txt) in enumerate(tokens):
+        if tipo == "LP":
+            pila.append(txt)
+        elif tipo == "RP":
+            if not pila:
+                raise ErrorSintaxis(f"Sobra el '{txt}': no hay nada que cerrar.")
+            esperado = PAR[pila[-1]]
+            if txt != esperado:
+                raise ErrorSintaxis(
+                    f"Se esperaba '{esperado}' para cerrar '{pila[-1]}', pero se encontró '{txt}'.")
+            pila.pop()
+            if tokens[k - 1][0] == "LP":
+                raise ErrorSintaxis(f"Hay un grupo vacío: '{tokens[k - 1][1]}{txt}'.")
+    if pila:
+        faltan = " ".join(PAR[x] for x in reversed(pila))
+        raise ErrorSintaxis(f"Falta cerrar: {faltan}")
 
 
 class Parser:
@@ -115,10 +141,10 @@ class Parser:
         if v == "CONST":
             return ("const", self._tomar()[1] == "1")
         if v == "LP":
-            self._tomar()
+            abre = self._tomar()[1]
             nodo = self._iff()
             if self._ver() != "RP":
-                raise ErrorSintaxis("Falta cerrar un paréntesis ')'.")
+                raise ErrorSintaxis(f"Falta cerrar '{abre}' con '{PAR[abre]}'.")
             self._tomar()
             return nodo
         if v is None:
@@ -551,9 +577,10 @@ def main():
         cols[i].button(simbolo, key=f"btn_{nombre}", use_container_width=True, help=nombre,
                        on_click=agregar, args=(f" {simbolo} ",))
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.button("(", use_container_width=True, on_click=agregar, args=("(",))
-    c2.button(")", use_container_width=True, on_click=agregar, args=(")",))
+    cols = st.columns(4)
+    for i, g in enumerate(["(", ")", "[", "]"]):
+        cols[i].button(g, key=f"btn_agr_{i}", use_container_width=True, on_click=agregar, args=(g,))
+    c3, c4 = st.columns(2)
     c3.button("🗑️ Limpiar", use_container_width=True, on_click=limpiar)
     c4.button("⌫ Borrar", use_container_width=True, on_click=borrar_ultimo)
 
@@ -593,7 +620,7 @@ def main():
             tabla_de_verdad(arbol, paso_a_paso=mostrar_pasos)  # valida (máx. variables)
         except ErrorSintaxis as e:
             st.error(f"❌ {e}")
-            st.info("Revisa operadores faltantes, paréntesis balanceados y que cada operador "
+            st.info("Revisa operadores faltantes, agrupadores ( ) [ ] balanceados y que cada operador "
                     "tenga sus dos operandos.")
         else:
             st.markdown("**Resolviendo:**")
@@ -615,7 +642,7 @@ def main():
 | **→** | Condicional | Falso solo si p=1 y q=0 |
 | **↔** | Bicondicional | Verdadero si ambos son IGUALES |
 
-**Precedencia (mayor a menor):** ¬, ∧, ∨, ⊕, →, ↔. Usa paréntesis para cambiar el orden.
+**Precedencia (mayor a menor):** ¬, ∧, ∨, ⊕, →, ↔. Usa agrupadores `( )`, `[ ]` o `{ }` para cambiar el orden (deben cerrarse con su pareja).
 
 **También puedes escribir:** `~` `&` `|` `->` `<->` `XOR` directamente en la expresión.
 """)
