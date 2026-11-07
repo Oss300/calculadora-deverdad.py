@@ -1,5 +1,6 @@
 
 
+
 """
 Calculadora de Tabla de Verdad + Procedimiento con Leyes Lógicas
 Ejecutar con:  streamlit run calculadora_completa.py
@@ -665,5 +666,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 
