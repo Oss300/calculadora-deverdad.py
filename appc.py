@@ -187,7 +187,41 @@ def evaluar(nodo, env):
     }[k]
 
 
+AGRUPADORES = [("(", ")"), ("[", "]"), ("{", "}")]
+
+
+ASOCIATIVOS = ("and", "or", "xor", "iff")
+
+
+def _cadena(nodo):
+    """True si el hijo izquierdo repite el mismo operador asociativo: a ∧ b ∧ c
+    (el parser agrupa a la izquierda, así que no hace falta agrupador)."""
+    return nodo[0] in ASOCIATIVOS and nodo[1][0] == nodo[0]
+
+
+def _interior(nodo):
+    """Niveles de agrupación dentro del texto del nodo, sin contar el suyo."""
+    if nodo[0] in ("var", "const"):
+        return 0
+    if nodo[0] == "not":
+        return _nivel(nodo[1])
+    izq = _interior(nodo[1]) if _cadena(nodo) else _nivel(nodo[1])
+    return max(izq, _nivel(nodo[2]))
+
+
+def _nivel(nodo):
+    """Niveles de agrupación que necesita mostrar este nodo (0 si ninguno)."""
+    k = nodo[0]
+    if k in ("var", "const"):
+        return 0
+    if k == "not":
+        return _nivel(nodo[1])
+    return 1 + _interior(nodo)
+
+
 def a_texto(nodo, raiz=True):
+    """Texto de la expresión. Agrupadores como en los libros: ( ) el grupo más
+    interno, [ ] el que lo contiene, { } el siguiente, y vuelve a empezar."""
     k = nodo[0]
     if k == "var":
         return nodo[1]
@@ -195,8 +229,12 @@ def a_texto(nodo, raiz=True):
         return "1" if nodo[1] else "0"
     if k == "not":
         return "¬" + a_texto(nodo[1], False)
-    s = f"{a_texto(nodo[1], False)} {SIMBOLO[k]} {a_texto(nodo[2], False)}"
-    return s if raiz else f"({s})"
+    izq = a_texto(nodo[1], _cadena(nodo))  # en cadena: sin agrupador extra
+    s = f"{izq} {SIMBOLO[k]} {a_texto(nodo[2], False)}"
+    if raiz:
+        return s
+    abre, cierra = AGRUPADORES[(_nivel(nodo) - 1) % 3]
+    return f"{abre}{s}{cierra}"
 
 
 def subexpresiones(nodo, acc=None):
@@ -666,6 +704,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
